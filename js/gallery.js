@@ -99,7 +99,6 @@ function Gallery(imgArr, canvasObj) {
 		} else {
 			popUp(this);
 		}
-		e.preventDefault();
 		return false;
 	}
 	var closePopUp = function(bmp) {
