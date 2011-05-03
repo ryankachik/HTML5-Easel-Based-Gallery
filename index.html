@@ -8,6 +8,7 @@
 		padding:0;
 	}
 </style>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <script type="text/javascript" src="libs/easel.js"></script>
 <script type="text/javascript" src="js/gallery.js"></script>
 <script type="text/javascript">
@@ -25,17 +26,27 @@
 			
 		gal = new Gallery(imgs, canvas);
 		gal.onLoadProgress = function(obj, e) {
-			console.log("Loaded: "+e.complete+" of "+e.total);
+			//console.log("Loaded: "+e.complete+" of "+e.total);
 		}
 		gal.onLoadInit = function(obj, e) {
-			console.log("Completed Loading!: "+e.complete+" of "+e.total);
+			//console.log("Completed Loading!: "+e.complete+" of "+e.total);
+		}
+		gal.onLayoutComplete = function(obj, e) {
+			canvas.width = (e.width > canvas.width) ? e.width : canvas.width;
+			canvas.height = (e.height > canvas.height) ? e.height : canvas.height;
 		}
 		gal.init();
 		
 		window.onresize = function() {
+			resizeWindow();
+		}
+		function resizeWindow() {
 			canvas.width = window.innerWidth;
 			canvas.height = window.innerHeight;
-			gal.update();
+			if(!gal.update()) {
+				console.log("no update");
+				setTimeout(resizeWindow, 100);
+			}
 		}
 	}
 </script>

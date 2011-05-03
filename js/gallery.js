@@ -4,6 +4,66 @@ Bitmap.prototype.width = function() {
 Bitmap.prototype.height = function() {
 	return this.scaleY * this.image.height;
 }
+Bitmap.prototype.setWidth = function(w) {
+	this.scaleX = w/this.image.width;
+}
+Bitmap.prototype.setHeight = function(h) {
+	this.scaleY = h/this.image.height;
+}
+Utils = {};
+Utils.executeCallback = function(scopeObj, fn, args) {
+	if(fn && typeof(fn) == "function") {
+		fn(scopeObj, args);
+	}
+}
+Tween.stage = {};
+function Tween(obj, prop, startValue, endValue, timeInSeconds, fpsValue) {
+	var _this = this;
+	var _event = {
+		object:obj,
+		property:prop,
+		begin:startValue,
+		end: endValue,
+		seconds:timeInSeconds,
+		fps:fpsValue,
+		step:0,
+		steps:0
+	}
+	obj[prop] = startValue;
+	
+	var frameCount = _event.fps * _event.seconds;
+	var stepValue = Math.abs((_event.end - _event.begin)/frameCount);
+	_event.step = stepValue;
+	_event.steps = frameCount;
+	
+	_this.onMotionChange = null;
+	_this.onMotionFinish = null;
+	
+	var that = _this;
+	_this.tick = function(e) {
+		if(_event.end > _event.begin) {
+			obj[prop] += _event.step;
+			if(obj[prop] >= _event.end) obj[prop] = _event.end;
+			if(obj[prop] >= _event.end) {
+				Utils.executeCallback(_this, _this.onMotionFinish, _event);
+				Ticker.removeListener(that);
+			}
+		} else {
+			obj[prop] -= _event.step;
+			if(obj[prop] <= _event.end) obj[prop] = _event.end;
+			if(obj[prop] <= _event.end) {
+				Utils.executeCallback(_this, _this.onMotionFinish, _event);
+				Ticker.removeListener(that);
+			}
+		}
+		Utils.executeCallback(_this, _this.onMotionChange, _event);
+		if(Tween.stage && typeof(Tween.stage == "function") && typeof(Tween.stage.update) == "function") {
+			Tween.stage.update();
+		}
+	}
+	Ticker.addListener(_this);
+	Ticker.setInterval((_event.seconds*1000)/_event.fps);
+}
 function Gallery(imgArr, canvasObj) {
 	var _this = this;
 	
@@ -12,12 +72,12 @@ function Gallery(imgArr, canvasObj) {
 	var _stage = null;
 	var _loaded = 0;
 	var _length = 0;
-	
+	var _isAnimating = false;
+	var _currentImage = null;
 	var _displayObjs = [];
 	
 	_this.xPadding = 3;
 	_this.yPadding = 3;
-	_this.hoverChange = 0.1;
 	_this.thumbnailSize = 150;
 	_this.maintainAspectRatio = true;
 	
@@ -31,7 +91,7 @@ function Gallery(imgArr, canvasObj) {
 		_stage = new Stage(_canvas);
 		_stage.mouseEnabled = true;
 		_stage.enableMouseOver();
-		
+		Tween.stage = _stage;
 		_loaded = 0;
 		_length = _imgs.length;
 		
@@ -48,14 +108,14 @@ function Gallery(imgArr, canvasObj) {
 		}
 	}
 	_this.update = function() {
-		layout();
+		return layout();
 	}
 	var fireImageLoad = function() {
 		_loaded++;
-		executeCallback(_this.onLoadProgress, {complete:_loaded, total:_length});
+		Utils.executeCallback(_this, _this.onLoadProgress, {complete:_loaded, total:_length});
 		if(_loaded == _length) {
 			handleAllImagesComplete();
-			executeCallback(_this.onLoadInit, {complete:_loaded, total:_length});
+			Utils.executeCallback(_this, _this.onLoadInit, {complete:_loaded, total:_length});
 		} else {
 			_stage.update();
 		}	
@@ -77,22 +137,103 @@ function Gallery(imgArr, canvasObj) {
 		_this.update();
 	}
 	var handleBitmapClick = function(e) {
-		alert("CLICK");
+		if(_isAnimating || (_currentImage && this != _currentImage)) return;
+		
+		if(_currentImage && this == _currentImage) {
+			closePopUp(this);
+		} else {
+			popUp(this);
+		}
+	}
+	var closePopUp = function(bmp) {
+		_isAnimating = true;
+		
+		new Tween(bmp, "x", bmp.x, bmp.oldSize.x, 0.5, 30);
+		new Tween(bmp, "y", bmp.y, bmp.oldSize.y, 0.5, 30);
+		var hTween = new Tween(bmp, "heightCounter", bmp.height(), bmp.oldSize.height, 0.5, 30);
+		var wTween = new Tween(bmp, "widthCounter", bmp.width(), bmp.oldSize.width, 0.5, 30);
+		var numComplete = 0;
+		wTween.onMotionChange = function(e) {
+			bmp.setWidth(bmp.widthCounter);
+			bmp.setHeight(bmp.heightCounter);
+		}
+		hTween.onMotionFinish = function(e) {
+			bmp.setHeight(bmp.oldSize.height);
+			numComplete++;
+			if(numComplete == 2) {
+				_isAnimating = false;
+				_currentImage = null;
+				layout();
+			}
+		}
+		wTween.onMotionFinish = function(e) {
+			bmp.setWidth(bmp.oldSize.width);
+			numComplete++;
+			if(numComplete == 2) {
+				_isAnimating = false;
+				_currentImage = null;
+				layout();
+			}
+		}
+	}
+	var popUp = function(bmp) {
+		_isAnimating = true;
+		
+		var w = _canvas.width;
+		var h = _canvas.height;
+		if(_this.maintainAspectRatio) {
+			h = (w/bmp.image.width) * bmp.image.height;
+		}
+		_stage.removeChild(bmp);
+		_stage.addChild(bmp);
+		
+		sizeImage(bmp, _this.thumbnailSize);
+		
+		bmp.oldSize = new Rectangle(bmp.x, bmp.y, bmp.width(), bmp.height());
+		bmp.widthCounter = bmp.width();
+		bmp.heightCounter = bmp.height();
+		
+		new Tween(bmp, "x", bmp.x, 0, 0.5, 30);
+		new Tween(bmp, "y", bmp.y, 0, 0.5, 30);
+		var hTween = new Tween(bmp, "heightCounter", bmp.heightCounter, h, 0.5, 30);
+		var wTween = new Tween(bmp, "widthCounter", bmp.widthCounter, w, 0.5, 30);
+		var numComplete = 0;
+		wTween.onMotionChange = function(e) {
+			bmp.setWidth(bmp.widthCounter);
+			bmp.setHeight(bmp.heightCounter);
+		}
+		wTween.onMotionFinish = function(e) {
+			bmp.setWidth(w);
+			numComplete++;
+			if(numComplete == 2) {
+				_isAnimating = false;
+				_currentImage = bmp;
+				Utils.executeCallback(_this, _this.onLayoutComplete, {width:bmp.width(), height:bmp.height()});
+			}
+		}
+		hTween.onMotionFinish = function(e) {
+			bmp.setHeight(h);
+			numComplete++;
+			if(numComplete == 2) {
+				_isAnimating = false;
+				_currentImage = bmp;
+				Utils.executeCallback(_this, _this.onLayoutComplete, {width:bmp.width(), height:bmp.height()});
+			}
+		}
+		
 	}
 	var handleBitmapOver = function(e) {
-		this.scaleX += _this.hoverChange;
-		this.scaleY += _this.hoverChange;
-		layout();
+		if(_isAnimating) return;
 	}
 	var handleBitmapOut = function(e) {
-		this.scaleX -= _this.hoverChange;
-		this.scaleY -= _this.hoverChange;
-		layout();
+		if(_isAnimating) return;
 	}
 	var layout = function() {
+		if(_isAnimating) return false;
 		var obj;
 		var w = _canvas.width;
 		var h = _canvas.height;
+		var heightToUse = 0;
 		var maxX = 0, maxY = 0, curX = 0, curY = 0;
 		
 		var rowHeight = 0;
@@ -101,7 +242,13 @@ function Gallery(imgArr, canvasObj) {
 			obj = _displayObjs[i];
 			if(!obj) continue;
 			
-			if(curX + obj.width() > w) {
+			heightToUse = obj.height();
+			
+			if(_currentImage && obj == _currentImage) {
+				heightToUse = obj.oldSize.height;
+			}
+		
+			if(curX + _this.thumbnailSize > w) {
 				curX = 0;
 				curY += (rowHeight + _this.yPadding);
 				
@@ -111,13 +258,21 @@ function Gallery(imgArr, canvasObj) {
 			obj.x = curX;
 			obj.y = curY;
 			
-			rowHeight = (obj.height() > rowHeight) ? obj.height() : rowHeight;
-			maxX = (obj.width() + obj.x > maxX) ? obj.width() + obj.x : maxX;
-			maxY = (obj.height() + obj.y > maxY) ? obj.height() + obj.y : maxY;
-			curX += obj.width() + _this.xPadding;
+			rowHeight = (heightToUse > rowHeight) ? heightToUse : rowHeight;
+			maxX = (_this.thumbnailSize + obj.x > maxX) ? _this.thumbnailSize + obj.x : maxX;
+			maxY = (heightToUse + obj.y > maxY) ? heightToUse + obj.y : maxY;
+			curX += _this.thumbnailSize + _this.xPadding;
 		}
-		executeCallback(_this.onLayoutComplete, {width:maxX, height:maxY});
+		if(_currentImage) {
+			_currentImage.oldSize.x = _currentImage.x;
+			_currentImage.oldSize.y = _currentImage.y;
+			_currentImage.x = 0;
+			_currentImage.y = 0;
+			sizeImage(_currentImage, w);
+		}
+		Utils.executeCallback(_this, _this.onLayoutComplete, {width:maxX, height:maxY});
 		_stage.update();
+		return true;
 	}
 	var sizeImage = function(bmp, size) {
 		var w = size;
@@ -126,16 +281,7 @@ function Gallery(imgArr, canvasObj) {
 		if(_this.maintainAspectRatio) {
 			h = (w/imgObj.width) * imgObj.height;
 		}
-		bmp.scaleX = w/imgObj.width;
-		bmp.scaleY = h/imgObj.height;
-		
-		
-		console.log("sizeIMage w "+imgObj.width+" h "+imgObj.height);
+		bmp.setWidth(w);
+		bmp.setHeight(h);	
 	}
-	var executeCallback = function(fn, args) {
-		if(fn && typeof(fn) == "function") {
-			fn(_this, args);
-		}
-	}
-	
 }
