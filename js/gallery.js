@@ -16,53 +16,73 @@ Utils.executeCallback = function(scopeObj, fn, args) {
 		fn(scopeObj, args);
 	}
 }
-Tween.stage = {};
-function Tween(obj, prop, startValue, endValue, timeInSeconds, fpsValue) {
+TweenGroup.stage = {};
+function TweenGroup(timeInSeconds, fpsValue) {
+	var _objs = [];
 	var _this = this;
-	var _event = {
-		object:obj,
-		property:prop,
-		begin:startValue,
-		end: endValue,
-		seconds:timeInSeconds,
-		fps:fpsValue,
-		step:0,
-		steps:0
-	}
-	obj[prop] = startValue;
 	
-	var frameCount = _event.fps * _event.seconds;
-	var stepValue = Math.abs((_event.end - _event.begin)/frameCount);
-	_event.step = stepValue;
-	_event.steps = frameCount;
+	var _time = timeInSeconds;
+	var _fps = fpsValue;
+	var _count = _fps * _time;
 	
 	_this.onMotionChange = null;
 	_this.onMotionFinish = null;
 	
-	var that = _this;
+	_this.add = function(obj, prop, startValue, endValue) {
+		var tweenObj = {
+			object:obj,
+			property:prop,
+			begin:startValue,
+			end: endValue,
+			step:0,
+			steps:_count
+		}
+		var stepValue = Math.abs((tweenObj.end - tweenObj.begin)/_count);
+		tweenObj.step = stepValue;
+		_objs[_objs.length] = tweenObj;
+	}
 	_this.tick = function(e) {
-		if(_event.end > _event.begin) {
-			obj[prop] += _event.step;
-			if(obj[prop] >= _event.end) obj[prop] = _event.end;
-			if(obj[prop] >= _event.end) {
-				Utils.executeCallback(_this, _this.onMotionFinish, _event);
-				Ticker.removeListener(that);
-			}
-		} else {
-			obj[prop] -= _event.step;
-			if(obj[prop] <= _event.end) obj[prop] = _event.end;
-			if(obj[prop] <= _event.end) {
-				Utils.executeCallback(_this, _this.onMotionFinish, _event);
-				Ticker.removeListener(that);
+		var len = _objs.len;
+		var obj;
+		var isComplete = false;
+		var i = 0;
+		for(i=0; i<len; i++) {
+			var obj = _objs[i];
+			if(obj.end > obj.begin) {
+				obj.object[obj.property] += obj.step;
+				if(obj.object[obj.property] >= obj.end) {
+					isComplete = true;
+					break;
+				}
+			} else {
+				obj.object[obj.property] -= obj.step;
+				if(obj.object[obj.property] <= obj.end) {
+					isComplete = true;
+					break;
+				}
 			}
 		}
-		Utils.executeCallback(_this, _this.onMotionChange, _event);
-		if(Tween.stage && typeof(Tween.stage == "function") && typeof(Tween.stage.update) == "function") {
-			Tween.stage.update();
+		if(isComplete) {
+			for(i=0; i<len; i++) {
+				var obj = _objs[i];
+				obj.object[obj.property] = obj.end;
+			}
+			Utils.executeCallback(_this, _this.onMotionFinish, _event);
+			_this.stop();
+		} else {
+			Utils.executeCallback(_this, _this.onMotionChange, _event);
+		}
+		if(TweenGroup.stage && typeof(Tween.stage == "function") && typeof(TweenGroup.stage.update) == "function") {
+			TweenGroup.stage.update();
 		}
 	}
-	Ticker.addListener(_this);
-	Ticker.setInterval((_event.seconds*1000)/_event.fps);
+	_this.start = function() {
+		Ticker.addListener(_this);
+		Ticker.setInterval((_times*1000)/_fps);
+	}
+	_this.stop = function() {
+		Ticker.removeListener(_this);
+	}
 }
 function Gallery(imgArr, canvasObj) {
 	var _this = this;
@@ -91,7 +111,7 @@ function Gallery(imgArr, canvasObj) {
 		_stage = new Stage(_canvas);
 		_stage.mouseEnabled = true;
 		_stage.enableMouseOver();
-		Tween.stage = _stage;
+		TweenGroup.stage = _stage;
 		_loaded = 0;
 		_length = _imgs.length;
 		
@@ -147,34 +167,25 @@ function Gallery(imgArr, canvasObj) {
 	}
 	var closePopUp = function(bmp) {
 		_isAnimating = true;
-		
-		new Tween(bmp, "x", bmp.x, bmp.oldSize.x, 0.5, 30);
-		new Tween(bmp, "y", bmp.y, bmp.oldSize.y, 0.5, 30);
-		var hTween = new Tween(bmp, "heightCounter", bmp.height(), bmp.oldSize.height, 0.5, 30);
-		var wTween = new Tween(bmp, "widthCounter", bmp.width(), bmp.oldSize.width, 0.5, 30);
+		var tween = new TweenGroup(0.5, 30);
+		tween.add(bmp, "x", bmp.x, bmp.oldSize.x);
+		tween.add(bmp, "y", bmp.y, bmp.oldSize.y);
+		tween.add(bmp, "heightCounter", bmp.height(), bmp.oldSize.height);
+		tween.add(bmp, "widthCounter", bmp.width(), bmp.oldSize.width);
 		var numComplete = 0;
-		wTween.onMotionChange = function(e) {
+		tween.onMotionChange = function(e) {
 			bmp.setWidth(bmp.widthCounter);
 			bmp.setHeight(bmp.heightCounter);
 		}
-		hTween.onMotionFinish = function(e) {
+		tween.onMotionFinish = function(e) {
+			bmp.setWidth(bmp.bmp.oldSize.width);
 			bmp.setHeight(bmp.oldSize.height);
-			numComplete++;
-			if(numComplete == 2) {
-				_isAnimating = false;
-				_currentImage = null;
-				layout();
-			}
+			
+			_isAnimating = false;
+			_currentImage = null;
+			layout();
 		}
-		wTween.onMotionFinish = function(e) {
-			bmp.setWidth(bmp.oldSize.width);
-			numComplete++;
-			if(numComplete == 2) {
-				_isAnimating = false;
-				_currentImage = null;
-				layout();
-			}
-		}
+		tween.start();
 	}
 	var popUp = function(bmp) {
 		_isAnimating = true;
@@ -193,34 +204,24 @@ function Gallery(imgArr, canvasObj) {
 		bmp.widthCounter = bmp.width();
 		bmp.heightCounter = bmp.height();
 		
-		new Tween(bmp, "x", bmp.x, 0, 0.5, 30);
-		new Tween(bmp, "y", bmp.y, 0, 0.5, 30);
-		var hTween = new Tween(bmp, "heightCounter", bmp.heightCounter, h, 0.5, 30);
-		var wTween = new Tween(bmp, "widthCounter", bmp.widthCounter, w, 0.5, 30);
-		var numComplete = 0;
-		wTween.onMotionChange = function(e) {
+		var tween = new TweenGroup(0.5, 30);
+		tween.add(bmp, "x", bmp.x, 0);
+		tween.add(bmp, "y", bmp.y, 0);
+		tween.add(bmp, "heightCounter", bmp.heightCounter, h);
+		tween.add(bmp, "widthCounter", bmp.widthCounter, w);
+
+		tween.onMotionChange = function(e) {
 			bmp.setWidth(bmp.widthCounter);
 			bmp.setHeight(bmp.heightCounter);
 		}
-		wTween.onMotionFinish = function(e) {
+		tween.onMotionFinish = function(e) {
 			bmp.setWidth(w);
-			numComplete++;
-			if(numComplete == 2) {
-				_isAnimating = false;
-				_currentImage = bmp;
-				Utils.executeCallback(_this, _this.onLayoutComplete, {width:bmp.width(), height:bmp.height()});
-			}
-		}
-		hTween.onMotionFinish = function(e) {
 			bmp.setHeight(h);
-			numComplete++;
-			if(numComplete == 2) {
-				_isAnimating = false;
-				_currentImage = bmp;
-				Utils.executeCallback(_this, _this.onLayoutComplete, {width:bmp.width(), height:bmp.height()});
-			}
-		}
 		
+			_isAnimating = false;
+			_currentImage = bmp;
+			Utils.executeCallback(_this, _this.onLayoutComplete, {width:bmp.width(), height:bmp.height()});
+		}
 	}
 	var handleBitmapOver = function(e) {
 		if(_isAnimating) return;
