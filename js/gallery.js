@@ -185,7 +185,7 @@ function Gallery(imgArr, canvasObj) {
 	}
 	var closePopUp = function(bmp) {
 		_isAnimating = true;
-		var tween = new TweenGroup(0.5, 30);
+		var tween = new TweenGroup(0.5, 15);
 		tween.add(bmp, "x", bmp.x, _canvas.width);
 		tween.add(_thumbHolder, "x", -_canvas.width, 0);
 		tween.onMotionFinish = function(e) {
@@ -206,7 +206,7 @@ function Gallery(imgArr, canvasObj) {
 		
 		sizeImage(obj, _canvas.width);
 		
-		var tween = new TweenGroup(0.5, 30);
+		var tween = new TweenGroup(0.5, 15);
 		tween.add(_thumbHolder, "x", 0, -_canvas.width);
 		tween.add(obj, "x", obj.x, 0);
 		tween.onMotionFinish = function(e) {
