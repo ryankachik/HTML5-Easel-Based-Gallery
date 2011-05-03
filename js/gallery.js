@@ -109,6 +109,7 @@ function Gallery(imgArr, canvasObj) {
 	var _isAnimating = false;
 	var _currentImage = null;
 	var _displayObjs = [];
+	var _thumbHolder = null;
 	
 	_this.xPadding = 3;
 	_this.yPadding = 3;
@@ -121,10 +122,11 @@ function Gallery(imgArr, canvasObj) {
 	
 	_this.init = function() {
 		if(typeof(Stage) != "function") throw "Requires EaselJS!";
-		
+		_thumbHolder = new Container();
 		_stage = new Stage(_canvas);
 		_stage.mouseEnabled = true;
 		_stage.enableMouseOver();
+		_stage.addChild(_thumbHolder);
 		TweenGroup.stage = _stage;
 		_loaded = 0;
 		_length = _imgs.length;
@@ -164,7 +166,7 @@ function Gallery(imgArr, canvasObj) {
 		
 		sizeImage(bmp, _this.thumbnailSize);
 		_displayObjs[image.galleryId] = bmp;
-		_stage.addChild(bmp);
+		_thumbHolder.addChild(bmp);
 		fireImageLoad();
 	}
 	var handleAllImagesComplete = function() {
@@ -178,23 +180,17 @@ function Gallery(imgArr, canvasObj) {
 		} else {
 			popUp(this);
 		}
+		e.preventDefault();
+		return false;
 	}
 	var closePopUp = function(bmp) {
 		_isAnimating = true;
 		var tween = new TweenGroup(0.5, 30);
-		tween.add(bmp, "x", bmp.x, bmp.oldSize.x);
-		tween.add(bmp, "y", bmp.y, bmp.oldSize.y);
-		tween.add(bmp, "heightCounter", bmp.height(), bmp.oldSize.height);
-		tween.add(bmp, "widthCounter", bmp.width(), bmp.oldSize.width);
-		tween.onMotionChange = function(e) {
-			bmp.setWidth(bmp.widthCounter);
-			bmp.setHeight(bmp.heightCounter);
-		}
+		tween.add(bmp, "x", bmp.x, _canvas.width);
+		tween.add(_thumbHolder, "x", -_canvas.width, 0);
 		tween.onMotionFinish = function(e) {
-			bmp.setWidth(bmp.oldSize.width);
-			bmp.setHeight(bmp.oldSize.height);
-			
 			_isAnimating = false;
+			_stage.removeChild(_currentImage);
 			_currentImage = null;
 			layout();
 		}
@@ -203,38 +199,22 @@ function Gallery(imgArr, canvasObj) {
 	var popUp = function(bmp) {
 		_isAnimating = true;
 		
-		var w = _canvas.width;
-		var h = _canvas.height;
-		if(_this.maintainAspectRatio) {
-			h = (w/bmp.image.width) * bmp.image.height;
-		}
-		_stage.removeChild(bmp);
-		_stage.addChild(bmp);
+		var obj = bmp.clone();
+		obj.onClick = handleBitmapClick;
+		obj.x = _canvas.width;
+		obj.y = 0;
 		
-		sizeImage(bmp, _this.thumbnailSize);
-		
-		bmp.oldSize = new Rectangle(bmp.x, bmp.y, bmp.width(), bmp.height());
-		bmp.widthCounter = bmp.width();
-		bmp.heightCounter = bmp.height();
+		sizeImage(obj, _canvas.width);
 		
 		var tween = new TweenGroup(0.5, 30);
-		tween.add(bmp, "x", bmp.x, 0);
-		tween.add(bmp, "y", bmp.y, 0);
-		tween.add(bmp, "heightCounter", bmp.heightCounter, h);
-		tween.add(bmp, "widthCounter", bmp.widthCounter, w);
-
-		tween.onMotionChange = function(e) {
-			bmp.setWidth(bmp.widthCounter);
-			bmp.setHeight(bmp.heightCounter);
-		}
+		tween.add(_thumbHolder, "x", 0, -_canvas.width);
+		tween.add(obj, "x", obj.x, 0);
 		tween.onMotionFinish = function(e) {
-			bmp.setWidth(w);
-			bmp.setHeight(h);
-		
 			_isAnimating = false;
-			_currentImage = bmp;
-			Utils.executeCallback(_this, _this.onLayoutComplete, {width:bmp.width(), height:bmp.height()});
+			_currentImage = obj;
+			Utils.executeCallback(_this, _this.onLayoutComplete, {width:obj.width(), height:obj.height()});
 		}
+		_stage.addChild(obj);
 		tween.start();
 	}
 	var handleBitmapOver = function(e) {
@@ -258,11 +238,6 @@ function Gallery(imgArr, canvasObj) {
 			if(!obj) continue;
 			
 			heightToUse = obj.height();
-			
-			if(_currentImage && obj == _currentImage) {
-				heightToUse = obj.oldSize.height;
-			}
-		
 			if(curX + _this.thumbnailSize > w) {
 				curX = 0;
 				curY += (rowHeight + _this.yPadding);
@@ -277,13 +252,6 @@ function Gallery(imgArr, canvasObj) {
 			maxX = (_this.thumbnailSize + obj.x > maxX) ? _this.thumbnailSize + obj.x : maxX;
 			maxY = (heightToUse + obj.y > maxY) ? heightToUse + obj.y : maxY;
 			curX += _this.thumbnailSize + _this.xPadding;
-		}
-		if(_currentImage) {
-			_currentImage.oldSize.x = _currentImage.x;
-			_currentImage.oldSize.y = _currentImage.y;
-			_currentImage.x = 0;
-			_currentImage.y = 0;
-			sizeImage(_currentImage, w);
 		}
 		Utils.executeCallback(_this, _this.onLayoutComplete, {width:maxX, height:maxY});
 		_stage.update();
