@@ -7,38 +7,99 @@ function Gallery(imgArr, canvasObj) {
 	var _loaded = 0;
 	var _length = 0;
 	
+	var _displayObjs = [];
+	
+	_this.xPadding = 3;
+	_this.yPadding = 3;
+	_this.thumbnailSize = 75;
+	_this.maintainAspectRatio = false;
 	
 	_this.onLoadProgress = null;
 	_this.onLoadInit = null;
+	_this.onLayoutComplete = null;
 	
 	_this.init = function() {
-		if(typeof(Stage) != "object") throw "Requires EaselJS!";
+		if(typeof(Stage) != "function") throw "Requires EaselJS!";
 		
 		_stage = new Stage(_canvas);
 		_stage.mouseEnabled = true;
 		
+		
+		
 		_loaded = 0;
 		_length = _imgs.length;
 		
-		for(var i=0; i<length; i++) {
+		
+		for(var i=0; i<_length; i++) {
 			var img = new Image();
-			var holder = new Container();
-			holder.id = i;
-			img.onLoad = handleImageLoad;
+			img.galleryId = i;
+			img.onload = function(e){
+				handleImageLoad(e);
+			}
+			img.onerror = function(e) {
+				fireImageLoad();
+			}
 			img.src = _imgs[i];
 		}
 	}
-	var handleImageLoad = function(e) {	
+	_this.update = function() {
+		layout();
+	}
+	var fireImageLoad = function() {
 		_loaded++;
 		executeCallback(_this.onLoadProgress, {complete:_loaded, total:_length});
-		if(complete == loaded) {
-			imgLoadComplete();
+		if(_loaded == _length) {
+			handleAllImagesComplete();
 			executeCallback(_this.onLoadInit, {complete:_loaded, total:_length});
-		}
-			
+		} else {
+			_stage.update();
+		}	
 	}
-	var imgLoadComplete = function() {
-	
+	var handleImageLoad = function(e) {	
+		var image = e.target;
+		var bmp = new Bitmap(image);
+		_displayObjs[image.galleryId] = bmp;
+		
+		_stage.addChild(bmp);
+		fireImageLoad();
+	}
+	var handleAllImagesComplete = function() {
+		layout();
+	}
+	var layout = function() {
+		var obj;
+		var w = _canvas.width;
+		var h = _canvas.height;
+		var maxX = 0;
+		var maxY = 0;
+		
+		var curX = 0;
+		var curY = 0;
+		
+		var rowHeight = 0;
+		
+		for(var i=0; i<_displayObjs.length; i++) {
+			obj = _displayObjs[i];
+			if(!obj) continue;
+			
+			if(curX + obj.image.width > w) {
+				curX = 0;
+				curY += (rowHeight + _this.yPadding);
+				
+				rowHeight = 0;
+			}
+			
+			obj.x = curX;
+			obj.y = curY;
+			
+			rowHeight = (obj.image.height > rowHeight) ? obj.image.height : rowHeight;
+			maxX = (obj.image.width + obj.x > maxX) ? obj.image.width + obj.x : maxX;
+			maxY = (obj.image.height + obj.y > maxY) ? obj.image.height + obj.y : maxY;
+			
+			curX += obj.image.width + _this.xPadding;
+		}
+		executeCallback(_this.onLayoutComplete, {width:maxX, height:maxY});
+		_stage.update();
 	}
 	var executeCallback = function(fn, args) {
 		if(fn && typeof(fn) == "function") {

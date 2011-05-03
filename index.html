@@ -2,19 +2,39 @@
 <html>
 <head>
 <title>Image Gallery</title>
+<style type="text/css">
+	body {
+		margin:0;
+		padding:0;
+	}
+</style>
 <script type="text/javascript" src="libs/easel.js"></script>
 <script type="text/javascript" src="js/gallery.js"></script>
 <script type="text/javascript">
 	//set up test images
 	var imgs = [];
 	var gal = {};
-	for(var i=0; i<12; i++) {
-		imgs[i] = "imgs/"+i+".jpg";
+	var canvas = {};
+	for(var i=1; i<12; i++) {
+		imgs.push("imgs/"+i+".jpg");
 	}
 	function init() {
-		var canvas = document.getElementById("main");
+		canvas = document.getElementById("main");
+		
 		gal = new Gallery(imgs, canvas);
+		gal.onLoadProgress = function(obj, e) {
+			console.log("Loaded: "+e.complete+" of "+e.total);
+		}
+		gal.onLoadInit = function(obj, e) {
+			console.log("Completed Loading!: "+e.complete+" of "+e.total);
+		}
 		gal.init();
+		
+		window.onresize = function() {
+			canvas.width = window.innerWidth;
+			canvas.height = window.innerHeight;
+			gal.update();
+		}
 	}
 </script>
 </head>
