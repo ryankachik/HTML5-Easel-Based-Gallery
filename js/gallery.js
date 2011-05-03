@@ -11,8 +11,8 @@ function Gallery(imgArr, canvasObj) {
 	
 	_this.xPadding = 3;
 	_this.yPadding = 3;
-	_this.thumbnailSize = 75;
-	_this.maintainAspectRatio = false;
+	_this.thumbnailSize = 150;
+	_this.maintainAspectRatio = true;
 	
 	_this.onLoadProgress = null;
 	_this.onLoadInit = null;
@@ -23,12 +23,9 @@ function Gallery(imgArr, canvasObj) {
 		
 		_stage = new Stage(_canvas);
 		_stage.mouseEnabled = true;
-		
-		
-		
+
 		_loaded = 0;
 		_length = _imgs.length;
-		
 		
 		for(var i=0; i<_length; i++) {
 			var img = new Image();
@@ -58,6 +55,7 @@ function Gallery(imgArr, canvasObj) {
 	var handleImageLoad = function(e) {	
 		var image = e.target;
 		var bmp = new Bitmap(image);
+		sizeImage(bmp, _this.thumbnailSize);
 		_displayObjs[image.galleryId] = bmp;
 		
 		_stage.addChild(bmp);
@@ -70,11 +68,7 @@ function Gallery(imgArr, canvasObj) {
 		var obj;
 		var w = _canvas.width;
 		var h = _canvas.height;
-		var maxX = 0;
-		var maxY = 0;
-		
-		var curX = 0;
-		var curY = 0;
+		var maxX = 0, maxY = 0, curX = 0, curY = 0;
 		
 		var rowHeight = 0;
 		
@@ -95,11 +89,27 @@ function Gallery(imgArr, canvasObj) {
 			rowHeight = (obj.image.height > rowHeight) ? obj.image.height : rowHeight;
 			maxX = (obj.image.width + obj.x > maxX) ? obj.image.width + obj.x : maxX;
 			maxY = (obj.image.height + obj.y > maxY) ? obj.image.height + obj.y : maxY;
-			
+			console.log("layout w "+obj.image.width+" h "+obj.image.height);
 			curX += obj.image.width + _this.xPadding;
 		}
 		executeCallback(_this.onLayoutComplete, {width:maxX, height:maxY});
 		_stage.update();
+	}
+	var sizeImage = function(bmp, size) {
+		var w = size;
+		var h = size;
+		var imgObj = bmp.image;
+		if(_this.maintainAspectRatio) {
+			h = (w/imgObj.width) * imgObj.height;
+		}
+		bmp.scaleX = w/imgObj.width;
+		bmp.scaleY = h/imgObj.height;
+		
+		imgObj.width = w;
+		imgObj.height = h;
+		
+		
+		console.log("sizeIMage w "+imgObj.width+" h "+imgObj.height);
 	}
 	var executeCallback = function(fn, args) {
 		if(fn && typeof(fn) == "function") {
